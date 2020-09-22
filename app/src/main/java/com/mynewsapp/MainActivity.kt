@@ -5,8 +5,10 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.view.View
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -22,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var countDownTimer: CountDownTimer
 
+    private var swipeDown : SwipeRefreshLayout? = null
     private var headingList= mutableListOf<String>()
     private var contentList=mutableListOf<String>()
     private var imageList=mutableListOf<String>()
@@ -30,13 +33,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        makeRequest()
+        swipeDown = swipeRefresh
+        swipeDown?.setOnRefreshListener {
+            makeRequest(3)
+        }
+        makeRequest(0)
     }
 
     private fun setScreen(){
-        recyclerView.setBackgroundColor(Color.rgb(255,255,255))
         recyclerView.layoutManager = LinearLayoutManager(applicationContext)
         recyclerView.adapter = NewsListAdapter(headingList,contentList,imageList,linksList)
+        recyclerView.setBackgroundColor(Color.rgb(255,255,255))
     }
 
     private fun addNews(heading:String,content:String,image:String,link:String){
@@ -45,50 +52,75 @@ class MainActivity : AppCompatActivity() {
         imageList.add(image)
         linksList.add(link)
     }
-
-    private fun fadeIn(){
-        initialScreen.animate().apply {
-            alpha(0f)
-            duration=3000
-        }.start()
+    private fun reset(){
+        headingList.clear()
+        contentList.clear()
+        imageList.clear()
+        linksList.clear()
     }
 
-    private fun makeRequest() {
+    private fun badNetwork(){
+        Toast.makeText(applicationContext,"Bad Network :-/",Toast.LENGTH_SHORT).show()
+    }
+
+    private fun makeRequest(depth : Int) {
 
         val api = Retrofit.Builder()
             .baseUrl(BASE_URL).addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(APIrequest::class.java)
 
+        if(swipeDown?.isRefreshing == false)
         progressBar.visibility=View.VISIBLE
 
         GlobalScope.launch(Dispatchers.IO){
 
             try {
                 val response = api.getNews()
+                reset()
                 for (i in response.news)
                     addNews(i.title,i.description,i.image,i.url)
 
                 withContext(Dispatchers.Main){
                     setScreen()
-                    fadeIn()
-                    progressBar.visibility=View.GONE
+                    if(swipeDown?.isRefreshing == false)
+                        progressBar.visibility=View.GONE
+                    if(swipeDown?.isRefreshing == true)
+                        swipeDown?.isRefreshing = false
                 }
             }
             catch (e : Exception){
 
                 withContext(Dispatchers.Main){
 
-                    countDownTimer= object : CountDownTimer(5000,1000) {
-                        override fun onTick(millisUntilFinished: Long) {
+                    if(swipeDown?.isRefreshing == false){
+                        countDownTimer= object : CountDownTimer(5000,1000) {
+                            override fun onTick(millisUntilFinished: Long) { }
+                            override fun onFinish() {
+                                makeRequest(0)
+                                countDownTimer.cancel()
+                            }
                         }
+                        countDownTimer.start()
+                    }
+                    else{
 
-                        override fun onFinish() {
-                            makeRequest()
-                            countDownTimer.cancel()
+                        if(depth!=0){
+                            countDownTimer= object : CountDownTimer(5000,1000) {
+                                override fun onTick(millisUntilFinished: Long) { }
+                                override fun onFinish() {
+                                    makeRequest(depth-1)
+                                    countDownTimer.cancel()
+                                }
+                            }
+                            countDownTimer.start()
+                        }
+                        else
+                        {
+                            swipeDown?.isRefreshing=false
+                            badNetwork()
                         }
                     }
-                    countDownTimer.start()
                 }
             }
 
