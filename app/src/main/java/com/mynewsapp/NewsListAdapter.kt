@@ -19,14 +19,17 @@ class NewsListAdapter(var heading: List<String>,
 
     inner class ViewHolder(val newsView: View) : RecyclerView.ViewHolder(newsView){
         val newsHeading = newsView.findViewById<TextView>(R.id.heading)
-        val newsContent = newsView.findViewById<TextView>(R.id.content)
         val newsImage = newsView.findViewById<ImageView>(R.id.image)
 
         init {
             newsView.setOnClickListener {v: View? ->
                 val position = adapterPosition
-                val intent = Intent(Intent.ACTION_VIEW)
-                intent.data = Uri.parse(link[position])
+                val intent = Intent(newsView.context, ArticleActivity::class.java)
+//                intent.data = Uri.parse(link[position])
+                intent.putExtra("title",heading[position])
+                intent.putExtra("description",content[position])
+                intent.putExtra("image",images[position])
+                intent.putExtra("link",link[position])
                 startActivity(newsView.context, intent, null)
             }
         }
@@ -41,7 +44,6 @@ class NewsListAdapter(var heading: List<String>,
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         holder.newsHeading.text=heading[position]
-        holder.newsContent.text=content[position]
         Glide.with(holder.newsImage)
             .load(images[position])
             .into(holder.newsImage)
